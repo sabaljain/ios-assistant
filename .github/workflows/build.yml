@@ -16,12 +16,13 @@ jobs:
       - name: Select Xcode 16
         run: sudo xcode-select -s /Applications/Xcode_16.app
 
-      # ── Signing setup ──────────────────────────────────────────────────────
-      # Store these four secrets in GitHub → Settings → Secrets and variables → Actions:
-      #   CERTIFICATE_P12_BASE64    Base64-encoded .p12 signing certificate
-      #   CERTIFICATE_PASSWORD      Password for the .p12 file
-      #   PROVISIONING_PROFILE_BASE64  Base64-encoded .mobileprovision file
-      #   APPLE_TEAM_ID             Your 10-character Apple Team ID (e.g. ABC1234DEF)
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ── Signing ─────────────────────────────────────────────────────────────
       - name: Install signing certificate
         env:
           CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
@@ -33,7 +34,8 @@ jobs:
           security create-keychain -p "" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN_PATH"
 
@@ -47,22 +49,23 @@ jobs:
             plutil -extract UUID xml1 -o - - | \
             grep -oP '(?<=<string>)[^<]+')
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID".mobileprovision
+          cp "$PROFILE_PATH" \
+            ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID".mobileprovision
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
 
-      # ── Build ──────────────────────────────────────────────────────────────
-      # After cloning and opening Package.swift in Xcode, export the scheme name
-      # (default: CalendarAssistant) and bundle ID, then update the two variables below.
+      # ── Build ────────────────────────────────────────────────────────────────
       - name: Build archive
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           xcodebuild archive \
+            -project CalendarAssistant.xcodeproj \
             -scheme CalendarAssistant \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/CalendarAssistant.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
-            | xcpretty || true
+            PROVISIONING_PROFILE="$PROFILE_UUID"
 
       - name: Export IPA
         run: |
