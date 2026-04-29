@@ -22,76 +22,31 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      # ── Signing ─────────────────────────────────────────────────────────────
-      - name: Install signing certificate
-        env:
-          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-        run: |
-          CERT_PATH="$RUNNER_TEMP/cert.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
-          echo "$CERTIFICATE_P12_BASE64" | base64 --decode -o "$CERT_PATH"
-          security create-keychain -p "" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
-            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN_PATH"
-
-      - name: Install provisioning profile
-        env:
-          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
-        run: |
-          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
-          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | \
-            plutil -extract UUID xml1 -o - - | \
-            grep -oP '(?<=<string>)[^<]+')
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PROFILE_PATH" \
-            ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID".mobileprovision
-          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
-
-      # ── Build ────────────────────────────────────────────────────────────────
-      - name: Build archive
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Build unsigned — AltStore on Windows handles all signing
+      - name: Build archive (unsigned)
         run: |
           xcodebuild archive \
             -project CalendarAssistant.xcodeproj \
             -scheme CalendarAssistant \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/CalendarAssistant.xcarchive" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE="$PROFILE_UUID"
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Export IPA
+      - name: Package unsigned IPA
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/CalendarAssistant.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/IPA"
+          APP_PATH=$(find "$RUNNER_TEMP/CalendarAssistant.xcarchive" \
+            -name "*.app" -maxdepth 4 | head -1)
+          PAYLOAD_DIR="$RUNNER_TEMP/Payload"
+          mkdir -p "$PAYLOAD_DIR"
+          cp -r "$APP_PATH" "$PAYLOAD_DIR/"
+          cd "$RUNNER_TEMP"
+          zip -qr CalendarAssistant.ipa Payload/
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: CalendarAssistant-${{ github.sha }}
-          path: ${{ runner.temp }}/IPA/*.ipa
+          path: ${{ runner.temp }}/CalendarAssistant.ipa
           retention-days: 14

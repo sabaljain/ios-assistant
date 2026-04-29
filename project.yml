@@ -16,8 +16,9 @@ targets:
       base:
         SWIFT_VERSION: "5.10"
         PRODUCT_BUNDLE_IDENTIFIER: com.replace.with.yourname.CalendarAssistant
-        DEVELOPMENT_TEAM: REPLACEME
-        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
     dependencies:
       - framework: FoundationModels.framework
         embed: false
