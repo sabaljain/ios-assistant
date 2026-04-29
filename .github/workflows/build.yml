@@ -1,0 +1,52 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [main, "claude/*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Build unsigned — AltStore on Windows handles all signing
+      - name: Build archive (unsigned)
+        run: |
+          xcodebuild archive \
+            -project CalendarAssistant.xcodeproj \
+            -scheme CalendarAssistant \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/CalendarAssistant.xcarchive" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH=$(find "$RUNNER_TEMP/CalendarAssistant.xcarchive" \
+            -name "*.app" -maxdepth 4 | head -1)
+          PAYLOAD_DIR="$RUNNER_TEMP/Payload"
+          mkdir -p "$PAYLOAD_DIR"
+          cp -r "$APP_PATH" "$PAYLOAD_DIR/"
+          cd "$RUNNER_TEMP"
+          zip -qr CalendarAssistant.ipa Payload/
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CalendarAssistant-${{ github.sha }}
+          path: ${{ runner.temp }}/CalendarAssistant.ipa
+          retention-days: 14

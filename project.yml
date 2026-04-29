@@ -1,0 +1,26 @@
+name: CalendarAssistant
+options:
+  bundleIdPrefix: com.replace.with.yourname
+  deploymentTarget:
+    iOS: "18.1"
+  xcodeVersion: "16.0"
+targets:
+  CalendarAssistant:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/CalendarAssistant
+    info:
+      path: Info.plist
+    settings:
+      base:
+        SWIFT_VERSION: "5.10"
+        PRODUCT_BUNDLE_IDENTIFIER: com.replace.with.yourname.CalendarAssistant
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+    dependencies:
+      - framework: FoundationModels.framework
+        embed: false
+      - framework: EventKit.framework
+        embed: false
