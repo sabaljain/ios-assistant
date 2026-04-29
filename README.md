@@ -12,7 +12,7 @@ An iPhone app that turns natural language into calendar events using **Apple Int
 |---|---|
 | iPhone | 15 Pro or later (A17 Pro+ required for Apple Intelligence) |
 | iOS | 18.1+ with Apple Intelligence enabled |
-| Xcode | 16.1+ (macOS only, used once for initial project setup) |
+| Windows | Git for Windows (provides Git Bash + OpenSSL — likely already installed) |
 | Apple ID | Free Apple ID is sufficient for development sideloading |
 
 ---
@@ -41,7 +41,36 @@ Sources/CalendarAssistant/
 
 ### One-time setup (~45 minutes)
 
-1. **Create Apple signing certificate on Windows** — use the web-based guide at [ioscodesigning.com](https://ioscodesigning.com/generating-code-signing-files/) (no Mac, no Keychain needed). Download the `.p12` file and note the password.
+1. **Create Apple signing certificate on Windows** using Git Bash (comes with [Git for Windows](https://git-scm.com/download/win) — no Mac, no Xcode needed):
+
+   ```bash
+   # Open Git Bash, then run:
+
+   # 1. Generate a private key
+   openssl genrsa -out AppleDevKey.key 2048
+
+   # 2. Generate a Certificate Signing Request (CSR)
+   #    Fill in your name and email when prompted, or use -subj to skip prompts:
+   openssl req -new -key AppleDevKey.key -out AppleDevRequest.csr \
+     -subj "/emailAddress=you@example.com/CN=Your Name/C=US"
+
+   # 3. Upload AppleDevRequest.csr to:
+   #    developer.apple.com → Certificates → + → Apple Development → upload CSR
+   #    Download the resulting ios_development.cer
+
+   # 4. Convert the downloaded .cer to .pem
+   openssl x509 -in ios_development.cer -inform DER -out AppleDev.pem
+
+   # 5. Bundle key + cert into a .p12 (choose any export password)
+   openssl pkcs12 -export -out AppleDev.p12 \
+     -inkey AppleDevKey.key -in AppleDev.pem \
+     -name "Apple Development"
+
+   # 6. Base64-encode for GitHub Secrets
+   base64 -w0 AppleDev.p12 > AppleDev.p12.b64
+   ```
+
+   Keep `AppleDev.p12.b64` and the export password — you'll need them in step 4.
 
 2. **Register your device** — connect iPhone, open AltStore on Windows, find your UDID. Add it at [developer.apple.com/account/resources/devices](https://developer.apple.com/account/resources/devices).
 
